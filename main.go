@@ -154,24 +154,51 @@ func uint8CArrayToGoSlice(p *C.uint8_t, l int) []uint8 {
 }
 
 type encoder = C.struct_Encoder
-type encoderCallback = func([]uint8, []uint8, []uint8, int, int, int, int, int, int) bool
 
 type Encoder struct {
 	*encoder
-	onDraw encoderCallback
+	onDraw func(*Encoder) bool
 }
 
-func NewEncoder(width, height, bitRate, gopSize, fps int, onDraw encoderCallback) *Encoder {
+type EncoderOptions struct {
+	Width   int
+	Height  int
+	BitRate int
+	GOPSize int
+	FPS     int
+}
+
+func NewEncoder(opts EncoderOptions, onDraw func(*Encoder) bool) *Encoder {
 	return &Encoder{
 		encoder: &encoder{
-			width:    C.int(width),
-			height:   C.int(height),
-			bit_rate: C.int(bitRate),
-			gop_size: C.int(gopSize),
-			fps:      C.int(fps),
+			width:    C.int(opts.Width),
+			height:   C.int(opts.Height),
+			bit_rate: C.int(opts.BitRate),
+			gop_size: C.int(opts.GOPSize),
+			fps:      C.int(opts.FPS),
 		},
 		onDraw: onDraw,
 	}
+}
+
+func (e *Encoder) Width() int {
+	return int(e.encoder.width)
+}
+
+func (e *Encoder) Height() int {
+	return int(e.encoder.height)
+}
+
+func (e *Encoder) Frame() int {
+	return int(e.encoder.frame)
+}
+
+func (e *Encoder) LineSize(ch int) int {
+	return int(e.encoder.picture.linesize[ch])
+}
+
+func (e *Encoder) Data(ch int) []uint8 {
+	return uint8CArrayToGoSlice(e.encoder.picture.data[ch], e.Height()*e.LineSize(ch))
 }
 
 func (e *Encoder) EncodeTo(filename string) {
@@ -181,16 +208,7 @@ func (e *Encoder) EncodeTo(filename string) {
 	end := false
 	for !end {
 		C.begin_frame(e.encoder)
-		width := int(e.encoder.width)
-		height := int(e.encoder.height)
-		frame := int(e.encoder.frame)
-		ly := int(e.encoder.picture.linesize[0])
-		lu := int(e.encoder.picture.linesize[1])
-		lv := int(e.encoder.picture.linesize[2])
-		dy := uint8CArrayToGoSlice(e.encoder.picture.data[0], height*ly)
-		du := uint8CArrayToGoSlice(e.encoder.picture.data[1], height*lu)
-		dv := uint8CArrayToGoSlice(e.encoder.picture.data[2], height*lv)
-		end = e.onDraw(dy, du, dv, ly, lu, lv, width, height, frame)
+		end = e.onDraw(e)
 		C.end_frame(e.encoder)
 	}
 	C.finalize(e.encoder)
@@ -201,18 +219,34 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Usage: %s <output file>\n", os.Args[0])
 		os.Exit(1)
 	}
-	e := NewEncoder(1280, 720, 4*1024*1024, 10, 30, func(dataY, dataU, dataV []uint8, linesizeY, linesizeU, linesizeV, width, height, frame int) bool {
+	opts := EncoderOptions{
+		Width:   1280,
+		Height:  720,
+		BitRate: 4 * 1024 * 1024,
+		GOPSize: 10,
+		FPS:     30,
+	}
+	e := NewEncoder(opts, func(e *Encoder) bool {
+		width := e.Width()
+		height := e.Height()
+		frame := e.Frame()
+		dataY := e.Data(0)
+		dataU := e.Data(1)
+		dataV := e.Data(2)
+		lineSizeY := e.LineSize(0)
+		lineSizeU := e.LineSize(1)
+		lineSizeV := e.LineSize(2)
 		// Y
 		for y := 0; y < height; y++ {
 			for x := 0; x < width; x++ {
-				dataY[y*linesizeY+x] = uint8(x + y + frame*3)
+				dataY[y*lineSizeY+x] = uint8(x + y + frame*3)
 			}
 		}
 		// Cb and Cr
 		for y := 0; y < height/2; y++ {
 			for x := 0; x < width/2; x++ {
-				dataU[y*linesizeU+x] = uint8(128 + y + frame*2)
-				dataV[y*linesizeV+x] = uint8(64 + x + frame*5)
+				dataU[y*lineSizeU+x] = uint8(128 + y + frame*2)
+				dataV[y*lineSizeV+x] = uint8(64 + x + frame*5)
 			}
 		}
 		return frame+1 == 30
