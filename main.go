@@ -56,84 +56,85 @@ struct Encoder {
 	int bit_rate;
 	int gop_size;
 	int fps;
+
+	const AVCodec *codec;
+	AVCodecContext *c;
+	FILE *f;
+	AVFrame *picture;
+	AVPacket *pkt;
 	int frame;
 };
 
 int onFrame(struct Encoder*, uint8_t*, uint8_t*, uint8_t*, int, int, int);
 
-static int save_video(struct Encoder *encoder, const char *filename)
-{
-	const AVCodec *codec;
-	AVCodecContext *c= NULL;
-	int i, ret, x, y;
-	FILE *f;
-	AVFrame *picture;
-	AVPacket *pkt;
-	uint8_t endcode[] = { 0, 0, 1, 0xb7 };
+static void initialize(struct Encoder *e, const char *filename) {
 	avcodec_register_all();
 	// find the mpeg1video encoder
-	codec = avcodec_find_encoder(AV_CODEC_ID_H264);
-	if (!codec) {
+	e->codec = avcodec_find_encoder(AV_CODEC_ID_H264);
+	if (!e->codec) {
 		fprintf(stderr, "codec not found\n");
 		exit(1);
 	}
-	c = avcodec_alloc_context3(codec);
-	picture = av_frame_alloc();
-	pkt = av_packet_alloc();
-	if (!pkt)
-		exit(1);
+	e->c = avcodec_alloc_context3(e->codec);
+	e->picture = av_frame_alloc();
+	e->pkt = av_packet_alloc();
+	if (!e->pkt) exit(1);
 	// put sample parameters
-	c->bit_rate = encoder->bit_rate;
+	e->c->bit_rate = e->bit_rate;
 	// resolution must be a multiple of two
-	c->width = encoder->width;
-	c->height = encoder->height;
+	e->c->width = e->width;
+	e->c->height = e->height;
 	// frames per second
-	c->time_base = (AVRational){1, encoder->fps};
-	c->framerate = (AVRational){encoder->fps, 1};
-	c->gop_size = encoder->gop_size; // emit one intra frame every these frames
-	c->max_b_frames=1;
-	c->pix_fmt = AV_PIX_FMT_YUV420P;
+	e->c->time_base = (AVRational){1, e->fps};
+	e->c->framerate = (AVRational){e->fps, 1};
+	e->c->gop_size = e->gop_size; // emit one intra frame every these frames
+	e->c->max_b_frames=1;
+	e->c->pix_fmt = AV_PIX_FMT_YUV420P;
 	// open it
-	if (avcodec_open2(c, codec, NULL) < 0) {
+	if (avcodec_open2(e->c, e->codec, NULL) < 0) {
 		fprintf(stderr, "could not open codec\n");
 		exit(1);
 	}
-	f = fopen(filename, "wb");
-	if (!f) {
+	e->f = fopen(filename, "wb");
+	if (!e->f) {
 		fprintf(stderr, "could not open %s\n", filename);
 		exit(1);
 	}
-	picture->format = c->pix_fmt;
-	picture->width  = c->width;
-	picture->height = c->height;
-	ret = av_frame_get_buffer(picture, 32);
-	if (ret < 0) {
+	e->picture->format = e->c->pix_fmt;
+	e->picture->width  = e->c->width;
+	e->picture->height = e->c->height;
+	if (av_frame_get_buffer(e->picture, 32) < 0) {
 		fprintf(stderr, "could not alloc the frame data\n");
 		exit(1);
 	}
-	// encode 1 second of video
-	int end = 0;
-	int frame = 0;
-	while (!end) {
-		fflush(stdout);
-		// make sure the frame data is writable
-		ret = av_frame_make_writable(picture);
-		if (ret < 0)
-			exit(1);
-		end = onFrame(encoder, picture->data[0], picture->data[1], picture->data[2], picture->linesize[0], picture->linesize[1], picture->linesize[2]);
-		picture->pts = i;
-		// encode the image
-		encode(c, picture, pkt, f);
-	}
+	e->frame = 0;
+}
+
+static int process_frame(struct Encoder *e) {
+	fflush(stdout);
+	// make sure the frame data is writable
+	if (av_frame_make_writable(e->picture) < 0) exit(1);
+	int end = onFrame(e,
+		e->picture->data[0], e->picture->data[1], e->picture->data[2],
+		e->picture->linesize[0], e->picture->linesize[1], e->picture->linesize[2]);
+	e->picture->pts = e->frame;
+	e->frame++;
+	// encode the image
+	encode(e->c, e->picture, e->pkt, e->f);
+	return end;
+}
+
+static uint8_t endcode[] = { 0, 0, 1, 0xb7 };
+
+static void finalize(struct Encoder *e) {
 	// flush the encoder
-	encode(c, NULL, pkt, f);
+	encode(e->c, NULL, e->pkt, e->f);
 	// add sequence end code to have a real MPEG file
-	fwrite(endcode, 1, sizeof(endcode), f);
-	fclose(f);
-	avcodec_free_context(&c);
-	av_frame_free(&picture);
-	av_packet_free(&pkt);
-	return 0;
+	fwrite(endcode, 1, sizeof(endcode), e->f);
+	fclose(e->f);
+	avcodec_free_context(&e->c);
+	av_frame_free(&e->picture);
+	av_packet_free(&e->pkt);
 }
 
 */
@@ -161,8 +162,8 @@ func newEncoder(width, height, bitRate, gopSize, fps int) *encoder {
 	return &encoder{
 		width:    C.int(width),
 		height:   C.int(height),
-		bit_rate:   C.int(bitRate),
-		gop_size:   C.int(gopSize),
+		bit_rate: C.int(bitRate),
+		gop_size: C.int(gopSize),
 		fps:      C.int(fps),
 	}
 }
@@ -170,7 +171,10 @@ func newEncoder(width, height, bitRate, gopSize, fps int) *encoder {
 func (e *encoder) EncodeTo(filename string) {
 	cFilename := C.CString(filename)
 	defer C.free(unsafe.Pointer(cFilename))
-	C.save_video(e, cFilename)
+	C.initialize(e, cFilename)
+	for C.process_frame(e) == 0 {
+	}
+	C.finalize(e)
 }
 
 func (e *encoder) onDraw(dataY, dataU, dataV []uint8, linesizeY, linesizeU, linesizeV, width, height, frame int) bool {
@@ -202,7 +206,6 @@ func onFrame(e *encoder, dataY, dataU, dataV *C.uint8_t, linesizeY, linesizeU, l
 	du := uint8CArrayToGoSlice(dataU, height*lu)
 	dv := uint8CArrayToGoSlice(dataV, height*lv)
 	result := e.onDraw(dy, du, dv, ly, lu, lv, width, height, frame)
-	e.frame++
 	if result {
 		return 1
 	}
@@ -214,6 +217,6 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Usage: %s <output file>\n", os.Args[0])
 		os.Exit(1)
 	}
-	e := newEncoder(1280, 720, 4 * 1024 * 1024, 10, 30)
+	e := newEncoder(1280, 720, 4*1024*1024, 10, 30)
 	e.EncodeTo(os.Args[1])
 }
