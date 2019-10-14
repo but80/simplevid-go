@@ -19,7 +19,7 @@ func main() {
 		GOPSize: 10,
 		FPS:     30,
 	}
-	e := ezvid.NewEncoder(opts, func(e *ezvid.Encoder) bool {
+	e := ezvid.NewCustomEncoder(opts, func(e ezvid.Encoder) bool {
 		frame := e.Frame()
 		if frame == 30 {
 			return false
