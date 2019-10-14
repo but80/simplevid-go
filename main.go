@@ -154,54 +154,46 @@ func uint8CArrayToGoSlice(p *C.uint8_t, l int) []uint8 {
 }
 
 type encoder = C.struct_Encoder
+type encoderCallback = func([]uint8, []uint8, []uint8, int, int, int, int, int, int) bool
 
-func newEncoder(width, height, bitRate, gopSize, fps int) *encoder {
-	return &encoder{
-		width:    C.int(width),
-		height:   C.int(height),
-		bit_rate: C.int(bitRate),
-		gop_size: C.int(gopSize),
-		fps:      C.int(fps),
+type Encoder struct {
+	*encoder
+	onDraw encoderCallback
+}
+
+func NewEncoder(width, height, bitRate, gopSize, fps int, onDraw encoderCallback) *Encoder {
+	return &Encoder{
+		encoder: &encoder{
+			width:    C.int(width),
+			height:   C.int(height),
+			bit_rate: C.int(bitRate),
+			gop_size: C.int(gopSize),
+			fps:      C.int(fps),
+		},
+		onDraw: onDraw,
 	}
 }
 
-func (e *encoder) EncodeTo(filename string) {
+func (e *Encoder) EncodeTo(filename string) {
 	cFilename := C.CString(filename)
 	defer C.free(unsafe.Pointer(cFilename))
-	C.initialize(e, cFilename)
+	C.initialize(e.encoder, cFilename)
 	end := false
 	for !end {
-		C.begin_frame(e)
-		width := int(e.width)
-		height := int(e.height)
-		frame := int(e.frame)
-		ly := int(e.picture.linesize[0])
-		lu := int(e.picture.linesize[1])
-		lv := int(e.picture.linesize[2])
-		dy := uint8CArrayToGoSlice(e.picture.data[0], height*ly)
-		du := uint8CArrayToGoSlice(e.picture.data[1], height*lu)
-		dv := uint8CArrayToGoSlice(e.picture.data[2], height*lv)
+		C.begin_frame(e.encoder)
+		width := int(e.encoder.width)
+		height := int(e.encoder.height)
+		frame := int(e.encoder.frame)
+		ly := int(e.encoder.picture.linesize[0])
+		lu := int(e.encoder.picture.linesize[1])
+		lv := int(e.encoder.picture.linesize[2])
+		dy := uint8CArrayToGoSlice(e.encoder.picture.data[0], height*ly)
+		du := uint8CArrayToGoSlice(e.encoder.picture.data[1], height*lu)
+		dv := uint8CArrayToGoSlice(e.encoder.picture.data[2], height*lv)
 		end = e.onDraw(dy, du, dv, ly, lu, lv, width, height, frame)
-		C.end_frame(e)
+		C.end_frame(e.encoder)
 	}
-	C.finalize(e)
-}
-
-func (e *encoder) onDraw(dataY, dataU, dataV []uint8, linesizeY, linesizeU, linesizeV, width, height, frame int) bool {
-	// Y
-	for y := 0; y < height; y++ {
-		for x := 0; x < width; x++ {
-			dataY[y*linesizeY+x] = uint8(x + y + frame*3)
-		}
-	}
-	// Cb and Cr
-	for y := 0; y < height/2; y++ {
-		for x := 0; x < width/2; x++ {
-			dataU[y*linesizeU+x] = uint8(128 + y + frame*2)
-			dataV[y*linesizeV+x] = uint8(64 + x + frame*5)
-		}
-	}
-	return frame+1 == 30
+	C.finalize(e.encoder)
 }
 
 func main() {
@@ -209,6 +201,21 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Usage: %s <output file>\n", os.Args[0])
 		os.Exit(1)
 	}
-	e := newEncoder(1280, 720, 4*1024*1024, 10, 30)
+	e := NewEncoder(1280, 720, 4*1024*1024, 10, 30, func(dataY, dataU, dataV []uint8, linesizeY, linesizeU, linesizeV, width, height, frame int) bool {
+		// Y
+		for y := 0; y < height; y++ {
+			for x := 0; x < width; x++ {
+				dataY[y*linesizeY+x] = uint8(x + y + frame*3)
+			}
+		}
+		// Cb and Cr
+		for y := 0; y < height/2; y++ {
+			for x := 0; x < width/2; x++ {
+				dataU[y*linesizeU+x] = uint8(128 + y + frame*2)
+				dataV[y*linesizeV+x] = uint8(64 + x + frame*5)
+			}
+		}
+		return frame+1 == 30
+	})
 	e.EncodeTo(os.Args[1])
 }
