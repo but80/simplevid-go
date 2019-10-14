@@ -1,4 +1,4 @@
-package ezvid
+package simplevid
 
 /*
 #cgo LDFLAGS: -lavcodec -lavutil
@@ -57,7 +57,16 @@ struct CEncoder {
 	int frame;
 };
 
+static void on_log(void *avcl, int level, const char *fmt, va_list vl) {
+	if (level <= AV_LOG_WARNING) {
+		av_log_default_callback(avcl, level, fmt, vl);
+	}
+}
+
 static const char* initialize(struct CEncoder *e, const char *filename) {
+	av_log_set_level(AV_LOG_DEBUG);
+	av_log_set_callback(on_log);
+
 	avcodec_register_all();
 	// find the mpeg1video cEncoder
 	e->codec = avcodec_find_encoder(AV_CODEC_ID_H264);

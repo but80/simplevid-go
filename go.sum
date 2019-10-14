@@ -1,4 +1,0 @@
-golang.org/x/xerrors v0.0.0-20191011141410-1b5146add898 h1:/atklqdjdhuosWIl6AIbOeHJjicWYPqR9bpxqxYG2pA=
-golang.org/x/xerrors v0.0.0-20191011141410-1b5146add898/go.mod h1:I/5z698sn9Ka8TeJc9MKroUUfqBBauWjQqLJ2OPfmY0=
-gopkg.in/targodan/ffgopeg.v1 v1.0.0-20161127111704-47145814abd3 h1:Crz1DKyb21tc2TgVx3Rje0rQDy/2QEuGyqyeMnUwcd4=
-gopkg.in/targodan/ffgopeg.v1 v1.0.0-20161127111704-47145814abd3/go.mod h1:96SS/NkFmUnpgHaq5TWO8J+Q4aL3h7atuy5jluafVdw=

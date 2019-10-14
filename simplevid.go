@@ -1,4 +1,4 @@
-package ezvid
+package simplevid
 
 // EncoderOptions は、ビデオエンコーダのオプションです。
 type EncoderOptions struct {
