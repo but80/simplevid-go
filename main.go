@@ -65,8 +65,6 @@ struct Encoder {
 	int frame;
 };
 
-int onFrame(struct Encoder*, uint8_t*, uint8_t*, uint8_t*, int, int, int);
-
 static void initialize(struct Encoder *e, const char *filename) {
 	avcodec_register_all();
 	// find the mpeg1video encoder
@@ -110,18 +108,17 @@ static void initialize(struct Encoder *e, const char *filename) {
 	e->frame = 0;
 }
 
-static int process_frame(struct Encoder *e) {
+static void begin_frame(struct Encoder *e) {
 	fflush(stdout);
 	// make sure the frame data is writable
 	if (av_frame_make_writable(e->picture) < 0) exit(1);
-	int end = onFrame(e,
-		e->picture->data[0], e->picture->data[1], e->picture->data[2],
-		e->picture->linesize[0], e->picture->linesize[1], e->picture->linesize[2]);
+}
+
+static void end_frame(struct Encoder *e) {
 	e->picture->pts = e->frame;
 	e->frame++;
 	// encode the image
 	encode(e->c, e->picture, e->pkt, e->f);
-	return end;
 }
 
 static uint8_t endcode[] = { 0, 0, 1, 0xb7 };
@@ -172,7 +169,20 @@ func (e *encoder) EncodeTo(filename string) {
 	cFilename := C.CString(filename)
 	defer C.free(unsafe.Pointer(cFilename))
 	C.initialize(e, cFilename)
-	for C.process_frame(e) == 0 {
+	end := false
+	for !end {
+		C.begin_frame(e)
+		width := int(e.width)
+		height := int(e.height)
+		frame := int(e.frame)
+		ly := int(e.picture.linesize[0])
+		lu := int(e.picture.linesize[1])
+		lv := int(e.picture.linesize[2])
+		dy := uint8CArrayToGoSlice(e.picture.data[0], height*ly)
+		du := uint8CArrayToGoSlice(e.picture.data[1], height*lu)
+		dv := uint8CArrayToGoSlice(e.picture.data[2], height*lv)
+		end = e.onDraw(dy, du, dv, ly, lu, lv, width, height, frame)
+		C.end_frame(e)
 	}
 	C.finalize(e)
 }
@@ -192,24 +202,6 @@ func (e *encoder) onDraw(dataY, dataU, dataV []uint8, linesizeY, linesizeU, line
 		}
 	}
 	return frame+1 == 30
-}
-
-//export onFrame
-func onFrame(e *encoder, dataY, dataU, dataV *C.uint8_t, linesizeY, linesizeU, linesizeV C.int) C.int {
-	width := int(e.width)
-	height := int(e.height)
-	frame := int(e.frame)
-	ly := int(linesizeY)
-	lu := int(linesizeU)
-	lv := int(linesizeV)
-	dy := uint8CArrayToGoSlice(dataY, height*ly)
-	du := uint8CArrayToGoSlice(dataU, height*lu)
-	dv := uint8CArrayToGoSlice(dataV, height*lv)
-	result := e.onDraw(dy, du, dv, ly, lu, lv, width, height, frame)
-	if result {
-		return 1
-	}
-	return 0
 }
 
 func main() {
