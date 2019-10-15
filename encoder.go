@@ -57,6 +57,10 @@ struct CEncoder {
 	int frame;
 };
 
+static void set_data(struct CEncoder *e, int ch, int x, int y, uint8_t v) {
+	e->picture->data[ch][y*e->picture->linesize[ch]+x] = v;
+}
+
 static void on_log(void *avcl, int level, const char *fmt, va_list vl) {
 	if (level <= AV_LOG_WARNING) {
 		av_log_default_callback(avcl, level, fmt, vl);
@@ -87,7 +91,7 @@ static const char* initialize(struct CEncoder *e, const char *filename) {
 	e->c->framerate = (AVRational){e->fps, 1};
 	e->c->gop_size = e->gop_size; // emit one intra frame every these frames
 	e->c->max_b_frames=1;
-	e->c->pix_fmt = AV_PIX_FMT_YUV420P;
+	e->c->pix_fmt = AV_PIX_FMT_YUV444P;
 	// open it
 	if (avcodec_open2(e->c, e->codec, NULL) < 0) {
 		return "could not open codec";
@@ -142,7 +146,7 @@ import "C"
 
 import (
 	"errors"
-	"reflect"
+	"image/color"
 	"unsafe"
 )
 
@@ -150,7 +154,8 @@ type cEncoder = C.struct_CEncoder
 
 type encoder struct {
 	*cEncoder
-	onDraw func(Encoder) bool
+	options EncoderOptions
+	onDraw  func(Encoder) bool
 }
 
 // NewCustomEncoder は、画素をカスタム処理で描画する新しい Encoder を返します。
@@ -163,18 +168,14 @@ func NewCustomEncoder(opts EncoderOptions, onDraw func(Encoder) bool) Encoder {
 			gop_size: C.int(opts.GOPSize),
 			fps:      C.int(opts.FPS),
 		},
-		onDraw: onDraw,
+		options: opts,
+		onDraw:  onDraw,
 	}
 }
 
-// Width は、ビデオ画面の横幅 [px] を返します。
-func (e *encoder) Width() int {
-	return int(e.cEncoder.width)
-}
-
-// Height は、ビデオ画面の縦幅 [px] を返します。
-func (e *encoder) Height() int {
-	return int(e.cEncoder.height)
+// Options は、このエンコーダに指定されたオプションを返します。
+func (e *encoder) Options() EncoderOptions {
+	return e.options
 }
 
 // Frame は、現在エンコード中のフレーム番号を返します。
@@ -182,23 +183,19 @@ func (e *encoder) Frame() int {
 	return int(e.cEncoder.frame)
 }
 
-// LineSize は、チャンネル ch の画素データが1行あたりいくつのスライス要素を使用するかを返します。
-func (e *encoder) LineSize(ch int) int {
-	return int(e.cEncoder.picture.linesize[ch])
+// SetYUV は、位置 (x, y) にYUVカラー (cy, cu, cv) の画素を描画します。
+func (e *encoder) SetYUV(x, y, cy, cu, cv int) {
+	C.set_data(e.cEncoder, 0, C.int(x), C.int(y), C.uint8_t(cy))
+	C.set_data(e.cEncoder, 1, C.int(x), C.int(y), C.uint8_t(cu))
+	C.set_data(e.cEncoder, 2, C.int(x), C.int(y), C.uint8_t(cv))
 }
 
-func uint8CArrayToGoSlice(p *C.uint8_t, l int) []uint8 {
-	var result []uint8
-	slice := (*reflect.SliceHeader)(unsafe.Pointer(&result))
-	slice.Cap = l
-	slice.Len = l
-	slice.Data = uintptr(unsafe.Pointer(p))
-	return result
-}
-
-// Data は、チャンネル ch の画素データをスライスで返します。
-func (e *encoder) Data(ch int) []uint8 {
-	return uint8CArrayToGoSlice(e.cEncoder.picture.data[ch], e.Height()*e.LineSize(ch))
+// SetRGB は、位置 (x, y) にRGBカラー (cr, cg, cb) の画素を描画します。
+func (e *encoder) SetRGB(x, y, cr, cg, cb int) {
+	cy, cu, cv := color.RGBToYCbCr(uint8(cr), uint8(cg), uint8(cb))
+	C.set_data(e.cEncoder, 0, C.int(x), C.int(y), C.uint8_t(cy))
+	C.set_data(e.cEncoder, 1, C.int(x), C.int(y), C.uint8_t(cu))
+	C.set_data(e.cEncoder, 2, C.int(x), C.int(y), C.uint8_t(cv))
 }
 
 // EncodeToFile は、ビデオをエンコードしてファイルに保存します。

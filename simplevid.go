@@ -16,16 +16,14 @@ type EncoderOptions struct {
 
 // Encoder は、ビデオエンコーダです。
 type Encoder interface {
-	// Width は、ビデオ画面の横幅 [px] を返します。
-	Width() int
-	// Height は、ビデオ画面の縦幅 [px] を返します。
-	Height() int
+	// Options は、このエンコーダに指定されたオプションを返します。
+	Options() EncoderOptions
 	// Frame は、現在エンコード中のフレーム番号を返します。
 	Frame() int
-	// LineSize は、チャンネル ch の画素データが1行あたりいくつのスライス要素を使用するかを返します。
-	LineSize(ch int) int
-	// Data は、チャンネル ch の画素データをスライスで返します。
-	Data(ch int) []uint8
+	// SetYUV は、位置 (x, y) にYUVカラー (cy, cu, cv) の画素を描画します。
+	SetYUV(x, y, cy, cu, cv int)
+	// SetRGB は、位置 (x, y) にRGBカラー (cr, cg, cb) の画素を描画します。
+	SetRGB(x, y, cr, cg, cb int)
 	// EncodeToFile は、ビデオをエンコードしてファイルに保存します。
 	EncodeToFile(filename string) error
 }

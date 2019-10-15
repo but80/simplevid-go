@@ -23,25 +23,14 @@ func ExampleEncoder() {
 		if frame == 30 {
 			return false
 		}
-		width := e.Width()
-		height := e.Height()
-		dataY := e.Data(0)
-		dataU := e.Data(1)
-		dataV := e.Data(2)
-		lineSizeY := e.LineSize(0)
-		lineSizeU := e.LineSize(1)
-		lineSizeV := e.LineSize(2)
-		// Y
-		for y := 0; y < height; y++ {
-			for x := 0; x < width; x++ {
-				dataY[y*lineSizeY+x] = uint8(x + y + frame*3)
-			}
-		}
-		// Cb and Cr
-		for y := 0; y < height/2; y++ {
-			for x := 0; x < width/2; x++ {
-				dataU[y*lineSizeU+x] = uint8(128 + y + frame*2)
-				dataV[y*lineSizeV+x] = uint8(64 + x + frame*5)
+		opts := e.Options()
+		for y := 0; y < opts.Height; y++ {
+			for x := 0; x < opts.Width; x++ {
+				e.SetRGB(x, y,
+					x+y+frame*3,
+					128+y/2+frame*2,
+					64+x/2+frame*5,
+				)
 			}
 		}
 		return true
