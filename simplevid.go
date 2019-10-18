@@ -16,6 +16,13 @@ type EncoderOptions struct {
 
 // Encoder は、ビデオエンコーダです。
 type Encoder interface {
+	// EncodeToFile は、ビデオをエンコードしてファイルに保存します。
+	EncodeToFile(filename string) error
+}
+
+// CallbackEncoder は、コールバック中で画素を描画するビデオエンコーダです。
+type CallbackEncoder interface {
+	Encoder
 	// Options は、このエンコーダに指定されたオプションを返します。
 	Options() EncoderOptions
 	// Frame は、現在エンコード中のフレーム番号を返します。
@@ -24,6 +31,4 @@ type Encoder interface {
 	SetYUV(x, y, cy, cu, cv int)
 	// SetRGB は、位置 (x, y) にRGBカラー (cr, cg, cb) の画素を描画します。
 	SetRGB(x, y, cr, cg, cb int)
-	// EncodeToFile は、ビデオをエンコードしてファイルに保存します。
-	EncodeToFile(filename string) error
 }

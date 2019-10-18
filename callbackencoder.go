@@ -152,15 +152,15 @@ import (
 
 type cEncoder = C.struct_CEncoder
 
-type encoder struct {
+type callbackEncoder struct {
 	*cEncoder
 	options EncoderOptions
-	onDraw  func(Encoder) bool
+	onDraw  func(CallbackEncoder) bool
 }
 
-// NewCustomEncoder は、画素をカスタム処理で描画する新しい Encoder を返します。
-func NewCustomEncoder(opts EncoderOptions, onDraw func(Encoder) bool) Encoder {
-	return &encoder{
+// NewCallbackEncoder は、新しい CallbackEncoder を返します。
+func NewCallbackEncoder(opts EncoderOptions, onDraw func(CallbackEncoder) bool) CallbackEncoder {
+	return &callbackEncoder{
 		cEncoder: &cEncoder{
 			width:    C.int(opts.Width),
 			height:   C.int(opts.Height),
@@ -174,24 +174,24 @@ func NewCustomEncoder(opts EncoderOptions, onDraw func(Encoder) bool) Encoder {
 }
 
 // Options は、このエンコーダに指定されたオプションを返します。
-func (e *encoder) Options() EncoderOptions {
+func (e *callbackEncoder) Options() EncoderOptions {
 	return e.options
 }
 
 // Frame は、現在エンコード中のフレーム番号を返します。
-func (e *encoder) Frame() int {
+func (e *callbackEncoder) Frame() int {
 	return int(e.cEncoder.frame)
 }
 
 // SetYUV は、位置 (x, y) にYUVカラー (cy, cu, cv) の画素を描画します。
-func (e *encoder) SetYUV(x, y, cy, cu, cv int) {
+func (e *callbackEncoder) SetYUV(x, y, cy, cu, cv int) {
 	C.set_data(e.cEncoder, 0, C.int(x), C.int(y), C.uint8_t(cy))
 	C.set_data(e.cEncoder, 1, C.int(x), C.int(y), C.uint8_t(cu))
 	C.set_data(e.cEncoder, 2, C.int(x), C.int(y), C.uint8_t(cv))
 }
 
 // SetRGB は、位置 (x, y) にRGBカラー (cr, cg, cb) の画素を描画します。
-func (e *encoder) SetRGB(x, y, cr, cg, cb int) {
+func (e *callbackEncoder) SetRGB(x, y, cr, cg, cb int) {
 	cy, cu, cv := color.RGBToYCbCr(uint8(cr), uint8(cg), uint8(cb))
 	C.set_data(e.cEncoder, 0, C.int(x), C.int(y), C.uint8_t(cy))
 	C.set_data(e.cEncoder, 1, C.int(x), C.int(y), C.uint8_t(cu))
@@ -199,7 +199,7 @@ func (e *encoder) SetRGB(x, y, cr, cg, cb int) {
 }
 
 // EncodeToFile は、ビデオをエンコードしてファイルに保存します。
-func (e *encoder) EncodeToFile(filename string) error {
+func (e *callbackEncoder) EncodeToFile(filename string) error {
 	cFilename := C.CString(filename)
 	defer C.free(unsafe.Pointer(cFilename))
 	if msg := C.initialize(e.cEncoder, cFilename); msg != nil {
