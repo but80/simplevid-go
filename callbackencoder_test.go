@@ -7,8 +7,8 @@ import (
 	"github.com/but80/simplevid-go"
 )
 
-func ExampleEncoder() {
-	filename := "example.mp4"
+func ExampleCallbackEncoder() {
+	filename := "example-callback-encoder.mp4"
 	os.Remove(filename)
 
 	opts := simplevid.EncoderOptions{
@@ -18,7 +18,7 @@ func ExampleEncoder() {
 		GOPSize: 10,
 		FPS:     30,
 	}
-	e := simplevid.NewCustomEncoder(opts, func(e simplevid.Encoder) bool {
+	e := simplevid.NewCallbackEncoder(opts, func(e simplevid.CallbackEncoder) bool {
 		frame := e.Frame()
 		if frame == 30 {
 			return false
@@ -45,5 +45,5 @@ func ExampleEncoder() {
 	fmt.Printf("%s is created.\n", filename)
 
 	// Output:
-	// example.mp4 is created.
+	// example-callback-encoder.mp4 is created.
 }
