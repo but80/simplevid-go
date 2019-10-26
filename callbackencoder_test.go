@@ -26,11 +26,13 @@ func ExampleCallbackEncoder() {
 		opts := e.Options()
 		for y := 0; y < opts.Height; y++ {
 			for x := 0; x < opts.Width; x++ {
-				e.SetRGB(x, y,
-					x+y+frame*3,
-					128+y/2+frame*2,
-					64+x/2+frame*5,
-				)
+				e.SetY(x, y, uint8(x+y+frame*3))
+			}
+		}
+		for y := 0; y < opts.Height/2; y++ {
+			for x := 0; x < opts.Width/2; x++ {
+				e.SetU(x, y, uint8(128+y+frame*2))
+				e.SetV(x, y, uint8(64+x+frame*5))
 			}
 		}
 		return true
