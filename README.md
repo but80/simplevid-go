@@ -1,6 +1,8 @@
 # simplevid-go
 
-simplevid-go は、とても簡単に利用できるGo言語向けビデオエンコーダです。
+simplevid-go は、とても簡単に動画ファイルを作成できるGo言語向けビデオエンコーダです。
+
+**出力したビデオが一般的な環境で再生できない問題が発生しています。[FFmpeg](https://www.ffmpeg.org/) を用いて `ffmpeg -i video.mp4 video-converted.mp4` のように変換してください。**
 
 - エンコーダに渡したコールバックが1フレームごとに呼び出されるので、その中で画素を描画するだけでビデオを作成することができます。
 - 現時点では、フォーマットは H264 YUV420 に固定されています。
@@ -11,7 +13,7 @@ simplevid-go は、とても簡単に利用できるGo言語向けビデオエ�
 - 以下のいずれかのOS
   - Windows + WSL
   - Linux
-  - macOS（動作はしますが、作成された動画はQuicktimeで再生できない場合があります）
+  - macOS
 - 依存ライブラリ
   - libavcodec
   - libavutil
